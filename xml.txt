@@ -1,0 +1,69 @@
+import os
+import xml.etree.ElementTree as ET
+import uuid
+from datetime import datetime, timedelta
+
+def extract_tags(root):
+    # Initialize an empty dictionary to store extracted tag information
+    tags_dict = {}
+
+    # List of relevant tags to extract
+    relevant_tags = ['tag1', 'tag2', 'tag3', 'tag4', 'tag5']
+
+    # Iterate over relevant XML elements and extract tag information
+    for tag_name in relevant_tags:
+        tag_value = root.find(f'.//{tag_name}').text
+        tags_dict[tag_name] = tag_value
+
+    # Extract and store the modified tags (PymtUid and UETR)
+    tags_dict['PymtUid'] = root.find('.//msgbody/pymtTran/PymtUid').text
+    tags_dict['UETR'] = root.find('.//msgbody/pymtTran/UETR').text
+
+    return tags_dict
+
+def modify_and_save_xml(filename, output_filename, prefix):
+    # Check if file exists
+    if not os.path.exists(filename):
+        raise FileNotFoundError(f"File '{filename}' not found.")
+
+    # Parse the XML file
+    tree = ET.parse(filename)
+    root = tree.getroot()
+
+    # Modify PymtUid and UETR fields
+    current_datetime = datetime.now().strftime('%d%m%y%H%M')
+    for pymtUid in root.findall('.//msgbody/pymtTran/PymtUid'):
+        pymtUid.text = f'{prefix[:2]}{current_datetime}'
+
+    for uetr in root.findall('.//msgbody/pymtTran/UETR'):
+        uetr.text = str(uuid.uuid4())
+
+    # Modify StatusDtTm and RcvdDtTm fields
+    yesterday = datetime.now() - timedelta(days=1)
+    formatted_yesterday = yesterday.strftime('%Y-%m-%dT%H:%M:%SZ')
+    for statusDtTm in root.findall('.//StatusDtTm'):
+        statusDtTm.text = formatted_yesterday
+    for rcvdDtTm in root.findall('.//RcvdDtTm'):
+        rcvdDtTm.text = yesterday.strftime('%Y-%m-%dT%H:%M:%S')
+
+    # Serialize the modified XML with the XML declaration specifying UTF-8 encoding
+    updated_xml = ET.tostring(root, encoding='UTF-8', xml_declaration=True)
+
+    # Write the modified XML to a file
+    with open(output_filename, 'wb') as f:
+        f.write(updated_xml)
+
+    # Extract other tags and store them in a dictionary after modification
+    tags_dict = extract_tags(root)
+
+    return updated_xml, tags_dict
+
+# Example usage:
+input_filename = "path/to/your/xml/file.xml"
+output_filename = "path/to/your/xml/updated_file.xml"
+prefix = "AB"  # Prefix for PymtUid
+updated_xml, tags_dict = modify_and_save_xml(input_filename, output_filename, prefix)
+
+# Print updated XML and extracted tag information
+print("Updated XML:", updated_xml)
+print("Extracted Tags:", tags_dict)
