@@ -1,1 +1,45 @@
+import json
+
+# Sample original dictionary
+original_dict = {'fruitzoo': 'apple', 'citrusblast': 'orange'}
+
+# Path to the JSON file with key mappings
+mapping_file_path = 'key_mappings.json'
+
+# Load key mappings from a JSON file
+def load_key_mappings(filepath):
+    with open(filepath, 'r') as file:
+        return json.load(file)
+
+# Create a new dictionary with the keys replaced according to the mapping
+def remap_keys(original, mappings):
+    new_dict = {}
+    for key, value in original.items():
+        new_key = mappings.get(key, key)  # Use original key if no mapping is provided
+        new_dict[new_key] = value
+    return new_dict
+
+# Save dictionary to a JSON file
+def save_dict_as_json(data, filename):
+    with open(filename, 'w') as file:
+        json.dump(data, file, indent=4)
+
+# Main process
+def main():
+    # Load mappings
+    mappings = load_key_mappings(mapping_file_path)
+    
+    # Remap keys in the original dictionary
+    updated_dict = remap_keys(original_dict, mappings)
+    
+    # Specify filename
+    filename = 'testi.json'
+    
+    # Save the new dictionary to a JSON file
+    save_dict_as_json(updated_dict, filename)
+    
+    print(f"Data saved to {filename}")
+
+if __name__ == "__main__":
+    main()
 
