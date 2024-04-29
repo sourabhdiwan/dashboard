@@ -1,17 +1,38 @@
 import json
+import datetime  # Added to handle datetime
+from pathlib import Path  # Good practice to manage file paths
 
 # Sample original dictionary
-original_dict = {'fruitzoo': 'apple', 'citrusblast': 'orange'}
+original_dict = {
+    'fruitzoo': 'apple',
+    'citrusblast': 'orange',
+    'created_at': datetime.datetime.now(),  # Potential non-serializable data
+}
 
 # Path to the JSON file with key mappings
 mapping_file_path = 'key_mappings.json'
 
-# Load key mappings from a JSON file
+# Load key mappings from a JSON file with error handling
 def load_key_mappings(filepath):
-    with open(filepath, 'r') as file:
+    path = Path(filepath)
+    if not path.exists():
+        raise FileNotFoundError(f"Mapping file '{filepath}' not found.")
+    
+    with path.open('r') as file:
         return json.load(file)
 
-# Create a new dictionary with the keys replaced according to the mapping
+# Convert non-serializable objects to JSON-compatible types
+def make_json_serializable(data):
+    if isinstance(data, datetime.datetime):
+        return data.isoformat()  # Convert datetime to a string
+    elif isinstance(data, dict):
+        return {k: make_json_serializable(v) for k, v in data.items()}
+    elif isinstance(data, list):
+        return [make_json_serializable(item) for item in data]
+    else:
+        return data
+
+# Create a new dictionary with keys replaced according to the mapping
 def remap_keys(original, mappings):
     new_dict = {}
     for key, value in original.items():
@@ -26,20 +47,26 @@ def save_dict_as_json(data, filename):
 
 # Main process
 def main():
-    # Load mappings
-    mappings = load_key_mappings(mapping_file_path)
+    try:
+        # Load key mappings
+        mappings = load_key_mappings(mapping_file_path)
+        
+        # Remap keys in the original dictionary
+        updated_dict = remap_keys(original_dict, mappings)
+        
+        # Ensure the updated dictionary is JSON-serializable
+        serializable_dict = make_json_serializable(updated_dict)
+        
+        # Specify filename
+        filename = 'testi.json'
+        
+        # Save the new dictionary to a JSON file
+        save_dict_as_json(serializable_dict, filename)
+        
+        print(f"Data saved to {filename}")
     
-    # Remap keys in the original dictionary
-    updated_dict = remap_keys(original_dict, mappings)
-    
-    # Specify filename
-    filename = 'testi.json'
-    
-    # Save the new dictionary to a JSON file
-    save_dict_as_json(updated_dict, filename)
-    
-    print(f"Data saved to {filename}")
+    except Exception as e:
+        print(f"An error occurred: {e}")
 
 if __name__ == "__main__":
     main()
-
