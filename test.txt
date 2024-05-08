@@ -25,19 +25,22 @@ ORACLE_PASSWORD = "YOUR_ORACLE_PASSWORD"
 # Path to the folder with XML files
 XML_FOLDER_PATH = "YOUR_XML_FOLDER_PATH"  # Update to your XML folder path
 
-# Function to modify XML content as plain text
-def modify_xml_content(xml_content):
-    # Replace <UETR> tags with UUID
-    xml_content = re.sub(r'<UETR>.*?</UETR>', lambda x: f'<UETR>{uuid.uuid4()}</UETR>', xml_content)
+# Function to modify XML content as plain text and capture UUID
+def modify_xml_content_and_capture_uuid(xml_content):
+    # Generate a new UUID
+    new_uuid = str(uuid.uuid4())
+    
+    # Replace <UETR> tags with the new UUID
+    xml_content = re.sub(r'<UETR>.*?</UETR>', f'<UETR>{new_uuid}</UETR>', xml_content)
     
     # Replace <PymtUid> tags with unique ID
     timestamp_str = datetime.now().strftime("%d%m%y%H%M")
     unique_pymt_uid = f"M1{timestamp_str}"
     xml_content = re.sub(r'<PymtUid>.*?</PymtUid>', f'<PymtUid>{unique_pymt_uid}</PymtUid>', xml_content)
     
-    return xml_content
+    return xml_content, new_uuid
 
-# Step 2: Connect to MQ and inject modified messages
+# Connect to MQ and inject modified messages
 try:
     qmgr = pymqi.connect(MQ_QUEUE_MANAGER, MQ_CHANNEL, MQ_HOST + f"({MQ_PORT})")
     queue = pymqi.Queue(qmgr, MQ_QUEUE_NAME)
@@ -49,37 +52,37 @@ try:
 
     for xml_file in xml_files:
         with open(xml_file, 'r', encoding='utf-8') as file:
-            original_content = file.read()  # Read original XML content
-            modified_content = modify_xml_content(original_content)  # Modify XML content
-            queue.put(modified_content)  # Inject modified content into MQ
-            logging.info("Injected modified message from %s into MQ", xml_file)
+            original_content = file.read()
+            modified_content, uetr_uuid = modify_xml_content_and_capture_uuid(original_content)
+            queue.put(modified_content)
+            logging.info(f"Injected modified message from {xml_file} into MQ with UETR {uetr_uuid}")
 
     queue.close()
     qmgr.disconnect()
 
 except Exception as e:
-    logging.error("Error injecting messages into MQ: %s", str(e))
+    logging.error(f"Error injecting messages into MQ: {e}")
     raise
 
-# Step 3: Connect to Oracle DB to verify modified messages
+# Connect to Oracle DB to verify modified messages
 try:
     with cx_Oracle.connect(ORACLE_USER, ORACLE_PASSWORD, ORACLE_DSN) as connection:
         cursor = connection.cursor()
-        query = "SELECT * FROM YOUR_TABLE WHERE YOUR_COLUMN = :value"
-        
+        query = "SELECT * FROM YOUR_TABLE WHERE UETR = :uetr_uuid"
+
         for xml_file in xml_files:
             with open(xml_file, 'r', encoding='utf-8') as file:
                 original_content = file.read()
-                modified_content = modify_xml_content(original_content)  # Apply the same modifications
+                _, uetr_uuid = modify_xml_content_and_capture_uuid(original_content)
 
-            cursor.execute(query, {"value": modified_content.strip()})
+            cursor.execute(query, {"uetr_uuid": uetr_uuid})
             result = cursor.fetchone()
 
             if result:
-                logging.info("Verified modified message from %s in Oracle DB", xml_file)
+                logging.info(f"Verified message with UETR {uetr_uuid} from {xml_file} in Oracle DB")
             else:
-                logging.warning("Modified message from %s not found in Oracle DB", xml_file)
+                logging.warning(f"Message with UETR {uetr_uuid} from {xml_file} not found in Oracle DB")
 
 except cx_Oracle.Error as e:
-    logging.error("Error connecting to Oracle DB or executing query: %s", str(e))
+    logging.error(f"Error connecting to Oracle DB or executing query: {e}")
     raise
