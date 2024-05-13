@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Directory Tree</title>
+    <style>
+        ul {
+            list-style-type: none;
+        }
+        ul ul {
+            margin-left: 20px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Directory Tree</h1>
+    <ul>
+        {% for key, value in tree.items() %}
+            <li>{{ key }}
+                {% if value %}
+                    <ul>
+                        {% for sub_key, sub_value in value.items() %}
+                            <li>{{ sub_key }}</li>
+                        {% endfor %}
+                    </ul>
+                {% endif %}
+            </li>
+        {% endfor %}
+    </ul>
+</body>
+</html>
+
+
+----------------------------
+
+import os
+from flask import Flask, render_template
+
+app = Flask(__name__)
+
+def generate_tree(directory):
+    tree = {}
+    for root, dirs, files in os.walk(directory):
+        current_level = tree
+        for dir_name in root.split(os.sep):
+            if dir_name not in current_level:
+                current_level[dir_name] = {}
+            current_level = current_level[dir_name]
+        for file_name in files:
+            current_level[file_name] = None
+    return tree
+
+@app.route('/tree')
+def show_tree():
+    directory = '.'  # You can change this to the directory you want to display
+    tree = generate_tree(directory)
+    return render_template('tree.html', tree=tree)
+
+if __name__ == '__main__':
+    app.run(debug=True)
