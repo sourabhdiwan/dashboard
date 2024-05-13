@@ -1,60 +1,13 @@
 import os
-from flask import Flask, render_template
 
-app = Flask(__name__)
+def print_tree(directory, indent=''):
+    print(indent + os.path.basename(directory) + '/')
+    indent += '    '
+    for item in os.listdir(directory):
+        item_path = os.path.join(directory, item)
+        if os.path.isdir(item_path):
+            print_tree(item_path, indent)
 
-def generate_tree(directory):
-    tree = {}
-    for root, dirs, files in os.walk(directory):
-        current_level = tree
-        for dir_name in root.split(os.sep):
-            if dir_name:
-                current_level = current_level.setdefault(dir_name, {})
-        for file_name in files:
-            current_level[file_name] = None
-    return tree
-
-def format_tree(tree):
-    lines = []
-    for key, value in tree.items():
-        lines.append(f"<li>{key}")
-        if value:
-            lines.append("<ul>")
-            lines.extend(format_tree(value))
-            lines.append("</ul>")
-        lines.append("</li>")
-    return lines
-
-@app.route('/tree')
-def show_tree():
-    directory = '.'  # You can change this to the directory you want to display
-    tree = generate_tree(directory)
-    formatted_tree = "\n".join(format_tree(tree))
-    return render_template('tree.html', formatted_tree=formatted_tree)
-
-if __name__ == '__main__':
-    app.run(debug=True)
-----------------
-
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Directory Tree</title>
-    <style>
-        ul {
-            list-style-type: none;
-        }
-        ul ul {
-            margin-left: 20px;
-        }
-    </style>
-</head>
-<body>
-    <h1>Directory Tree</h1>
-    <ul>
-        {{ formatted_tree | safe }}
-    </ul>
-</body>
-</html>
+# Example usage:
+directory = '.'  # You can change this to the directory you want to display
+print_tree(directory)
