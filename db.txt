@@ -1,0 +1,81 @@
+from flask import Flask, render_template
+import oracledb
+
+app = Flask(__name__)
+
+# Database connection configuration
+DB_USER = 'your_username'
+DB_PASSWORD = 'your_password'
+DB_DSN = 'your_db_host:your_db_port/your_service_name'
+
+# Initialize Oracle client (for Thick mode)
+# oracledb.init_oracle_client(lib_dir="/path/to/instantclient")  # Uncomment and set path if using Thick mode
+
+@app.route('/')
+def index():
+    try:
+        # Connect to the Oracle database
+        connection = oracledb.connect(
+            user=DB_USER,
+            password=DB_PASSWORD,
+            dsn=DB_DSN
+        )
+
+        # Create a cursor and execute a query
+        cursor = connection.cursor()
+        cursor.execute("SELECT * FROM your_table")
+
+        # Fetch the results
+        results = cursor.fetchall()
+
+        # Close the connection
+        cursor.close()
+        connection.close()
+
+        # Render the results in the HTML template
+        return render_template('index.html', results=results)
+
+    except oracledb.DatabaseError as e:
+        # Handle database connection errors
+        error, = e.args
+        return f"Error connecting to the database: {error.message}"
+
+if __name__ == '__main__':
+    app.run(debug=True)
+
+
+
+
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Oracle Query Results</title>
+</head>
+<body>
+    <h1>Oracle Query Results</h1>
+    <table border="1">
+        <thead>
+            <tr>
+                <!-- Adjust the table headers based on your table columns -->
+                <th>Column 1</th>
+                <th>Column 2</th>
+                <th>Column 3</th>
+                <!-- Add more headers as needed -->
+            </tr>
+        </thead>
+        <tbody>
+            {% for row in results %}
+            <tr>
+                {% for column in row %}
+                <td>{{ column }}</td>
+                {% endfor %}
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</body>
+</html>
+
+
