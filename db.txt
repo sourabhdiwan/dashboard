@@ -1,43 +1,3 @@
-# config.py
-import os
-
-class Config:
-    DEBUG = False
-    TESTING = False
-
-class DevelopmentConfig(Config):
-    DEBUG = True
-    DB_USER = os.getenv('DEV_DB_USER')
-    DB_PASSWORD = os.getenv('DEV_DB_PASSWORD')
-    DB_DSN = os.getenv('DEV_DB_DSN')
-
-class TestingConfig(Config):
-    TESTING = True
-    DB_USER = os.getenv('TEST_DB_USER')
-    DB_PASSWORD = os.getenv('TEST_DB_PASSWORD')
-    DB_DSN = os.getenv('TEST_DB_DSN')
-
-class StagingConfig(Config):
-    DB_USER = os.getenv('STAGE_DB_USER')
-    DB_PASSWORD = os.getenv('STAGE_DB_PASSWORD')
-    DB_DSN = os.getenv('STAGE_DB_DSN')
-
-class ProductionConfig(Config):
-    DB_USER = os.getenv('PROD_DB_USER')
-    DB_PASSWORD = os.getenv('PROD_DB_PASSWORD')
-    DB_DSN = os.getenv('PROD_DB_DSN')
-
-config_dict = {
-    'development': DevelopmentConfig,
-    'testing': TestingConfig,
-    'staging': StagingConfig,
-    'production': ProductionConfig,
-}
-
-
-
-
-# db.py
 import os
 import oracledb
 from config import config_dict
@@ -55,36 +15,44 @@ def get_db_connection(env):
     db_password = config.DB_PASSWORD
     db_dsn = config.DB_DSN
 
-    # Connect to the Oracle database
-    connection = oracledb.connect(
-        user=db_user,
-        password=db_password,
-        dsn=db_dsn
-    )
-    return connection
+    try:
+        # Connect to the Oracle database
+        connection = oracledb.connect(
+            user=db_user,
+            password=db_password,
+            dsn=db_dsn
+        )
+        return connection
+    except oracledb.Error as e:
+        raise ConnectionError(f"Failed to connect to {env}: {e}")
 
 def fetch_data_from_db(env):
-    connection = get_db_connection(env)
-    cursor = connection.cursor()
-    cursor.execute("SELECT * FROM your_table")
-    results = cursor.fetchall()
-    cursor.close()
-    connection.close()
-    return results
+    try:
+        connection = get_db_connection(env)
+        cursor = connection.cursor()
+        cursor.execute("SELECT * FROM your_table")
+        results = cursor.fetchall()
+        cursor.close()
+        connection.close()
+        return results
+    except ConnectionError as ce:
+        return str(ce)  # Return the error message if connection fails
 
 def fetch_data_from_all_envs():
     results = {}
     for env in config_dict.keys():
-        results[env] = fetch_data_from_db(env)
+        result = fetch_data_from_db(env)
+        if isinstance(result, str):  # Check if the result is an error message
+            results[env] = {'error': result}
+        else:
+            results[env] = {'data': result}
     return results
 
 
 
 
-
-# app.py
 from flask import Flask, render_template
-import db
+from db import fetch_data_from_all_envs
 
 app = Flask(__name__)
 
@@ -92,13 +60,12 @@ app = Flask(__name__)
 def index():
     try:
         # Fetch data from all environments
-        all_results = db.fetch_data_from_all_envs()
+        all_results = fetch_data_from_all_envs()
         # Render the results in the HTML template
         return render_template('index.html', results=all_results)
-    except oracledb.DatabaseError as e:
+    except Exception as e:
         # Handle database connection errors
-        error, = e.args
-        return f"Error connecting to the database: {error.message}"
+        return f"Error: {e}"
 
 if __name__ == '__main__':
     app.run(debug=True)
@@ -117,8 +84,11 @@ if __name__ == '__main__':
 </head>
 <body>
     <h1>Oracle Query Results</h1>
-    {% for env, env_results in results.items() %}
+    {% for env, result in results.items() %}
     <h2>Environment: {{ env }}</h2>
+    {% if result.error %}
+    <p>Error: {{ result.error }}</p>
+    {% else %}
     <table border="1">
         <thead>
             <tr>
@@ -130,7 +100,7 @@ if __name__ == '__main__':
             </tr>
         </thead>
         <tbody>
-            {% for row in env_results %}
+            {% for row in result.data %}
             <tr>
                 {% for column in row %}
                 <td>{{ column }}</td>
@@ -139,6 +109,7 @@ if __name__ == '__main__':
             {% endfor %}
         </tbody>
     </table>
+    {% endif %}
     {% endfor %}
 </body>
 </html>
