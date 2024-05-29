@@ -1,40 +1,100 @@
-from flask import Flask, render_template
+# config.py
+import os
+
+class Config:
+    DEBUG = False
+    TESTING = False
+
+class DevelopmentConfig(Config):
+    DEBUG = True
+    DB_USER = os.getenv('DEV_DB_USER')
+    DB_PASSWORD = os.getenv('DEV_DB_PASSWORD')
+    DB_DSN = os.getenv('DEV_DB_DSN')
+
+class TestingConfig(Config):
+    TESTING = True
+    DB_USER = os.getenv('TEST_DB_USER')
+    DB_PASSWORD = os.getenv('TEST_DB_PASSWORD')
+    DB_DSN = os.getenv('TEST_DB_DSN')
+
+class StagingConfig(Config):
+    DB_USER = os.getenv('STAGE_DB_USER')
+    DB_PASSWORD = os.getenv('STAGE_DB_PASSWORD')
+    DB_DSN = os.getenv('STAGE_DB_DSN')
+
+class ProductionConfig(Config):
+    DB_USER = os.getenv('PROD_DB_USER')
+    DB_PASSWORD = os.getenv('PROD_DB_PASSWORD')
+    DB_DSN = os.getenv('PROD_DB_DSN')
+
+config_dict = {
+    'development': DevelopmentConfig,
+    'testing': TestingConfig,
+    'staging': StagingConfig,
+    'production': ProductionConfig,
+}
+
+
+
+
+# db.py
+import os
 import oracledb
+from config import config_dict
+from dotenv import load_dotenv
+
+load_dotenv()
+
+def get_db_connection(env):
+    # Initialize Oracle client (Thin mode)
+    oracledb.init_oracle_client()
+
+    # Load environment-specific configuration
+    config = config_dict[env]
+    db_user = config.DB_USER
+    db_password = config.DB_PASSWORD
+    db_dsn = config.DB_DSN
+
+    # Connect to the Oracle database
+    connection = oracledb.connect(
+        user=db_user,
+        password=db_password,
+        dsn=db_dsn
+    )
+    return connection
+
+def fetch_data_from_db(env):
+    connection = get_db_connection(env)
+    cursor = connection.cursor()
+    cursor.execute("SELECT * FROM your_table")
+    results = cursor.fetchall()
+    cursor.close()
+    connection.close()
+    return results
+
+def fetch_data_from_all_envs():
+    results = {}
+    for env in config_dict.keys():
+        results[env] = fetch_data_from_db(env)
+    return results
+
+
+
+
+
+# app.py
+from flask import Flask, render_template
+import db
 
 app = Flask(__name__)
-
-# Database connection configuration
-DB_USER = 'your_username'
-DB_PASSWORD = 'your_password'
-DB_DSN = 'your_db_host:your_db_port/your_service_name'
-
-# Initialize Oracle client (for Thick mode)
-# oracledb.init_oracle_client(lib_dir="/path/to/instantclient")  # Uncomment and set path if using Thick mode
 
 @app.route('/')
 def index():
     try:
-        # Connect to the Oracle database
-        connection = oracledb.connect(
-            user=DB_USER,
-            password=DB_PASSWORD,
-            dsn=DB_DSN
-        )
-
-        # Create a cursor and execute a query
-        cursor = connection.cursor()
-        cursor.execute("SELECT * FROM your_table")
-
-        # Fetch the results
-        results = cursor.fetchall()
-
-        # Close the connection
-        cursor.close()
-        connection.close()
-
+        # Fetch data from all environments
+        all_results = db.fetch_data_from_all_envs()
         # Render the results in the HTML template
-        return render_template('index.html', results=results)
-
+        return render_template('index.html', results=all_results)
     except oracledb.DatabaseError as e:
         # Handle database connection errors
         error, = e.args
@@ -46,6 +106,8 @@ if __name__ == '__main__':
 
 
 
+
+<!-- templates/index.html -->
 <!doctype html>
 <html lang="en">
 <head>
@@ -55,6 +117,8 @@ if __name__ == '__main__':
 </head>
 <body>
     <h1>Oracle Query Results</h1>
+    {% for env, env_results in results.items() %}
+    <h2>Environment: {{ env }}</h2>
     <table border="1">
         <thead>
             <tr>
@@ -66,7 +130,7 @@ if __name__ == '__main__':
             </tr>
         </thead>
         <tbody>
-            {% for row in results %}
+            {% for row in env_results %}
             <tr>
                 {% for column in row %}
                 <td>{{ column }}</td>
@@ -75,7 +139,6 @@ if __name__ == '__main__':
             {% endfor %}
         </tbody>
     </table>
+    {% endfor %}
 </body>
 </html>
-
-
